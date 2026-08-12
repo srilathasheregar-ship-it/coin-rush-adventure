@@ -18,53 +18,61 @@ jobs:
         run: |
           ZIP_FILE=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
           if [ -z "$ZIP_FILE" ]; then
-            echo "No ZIP file found"
+            echo "ZIP file not found"
             exit 1
           fi
-          echo "ZIP found: $ZIP_FILE"
-          mkdir -p extracted
-          unzip -q "$ZIP_FILE" -d extracted
+          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
 
-      - name: Find Android project
+      - name: Extract project
         run: |
-          echo "Searching for Gradle project..."
-          GRADLEW=$(find extracted -type f -name "gradlew" | head -n 1)
-
-          if [ -z "$GRADLEW" ]; then
-            echo "gradlew not found."
-            echo "Contents of extracted project:"
-            find extracted -maxdepth 4 -type f | head -100
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$GRADLEW")
-          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-          echo "Android project found at: $PROJECT_DIR"
+          rm -rf extracted
+          mkdir extracted
+          unzip -q "$ZIP_FILE" -d extracted
+          echo "Extracted project:"
+          find extracted -maxdepth 3 -type f | sort
 
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
+
+      - name: Find Android project
+        run: |
+          ANDROID_DIR=$(find extracted -type f -name "gradlew" -print -quit | xargs -r dirname)
+          if [ -z "$ANDROID_DIR" ]; then
+            ANDROID_DIR=$(find extracted -type f -name "settings.gradle*" -print -quit | xargs -r dirname)
+          fi
+          if [ -z "$ANDROID_DIR" ]; then
+            echo "Android Gradle project not found"
+            find extracted -maxdepth 4 -type f | sort
+            exit 1
+          fi
+          echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
+          echo "Android project: $ANDROID_DIR"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Make Gradle executable
-        run: chmod +x "$PROJECT_DIR/gradlew"
+        run: chmod +x gradlew
+        working-directory: ${{ env.ANDROID_DIR }}
 
       - name: Build Release AAB
-        run: |
-          cd "$PROJECT_DIR"
-          ./gradlew bundleRelease --stacktrace
+        run: ./gradlew bundleRelease
+        working-directory: ${{ env.ANDROID_DIR }}
 
       - name: Find AAB
         run: |
-          find "$PROJECT_DIR" -type f -name "*.aab" -print
+          AAB=$(find "$ANDROID_DIR" -type f -name "*.aab" -print -quit)
+          if [ -z "$AAB" ]; then
+            echo "AAB not found"
+            exit 1
+          fi
+          echo "AAB=$AAB" >> "$GITHUB_ENV"
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
           name: coin-rush-release-aab
-          path: |
-            **/build/outputs/bundle/**/*.aab
+          path: ${{ env.AAB }}
