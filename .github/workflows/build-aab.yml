@@ -40,7 +40,7 @@ jobs:
       - name: Build Release AAB
         working-directory: extracted/android
         run: |
-          gradle bundleRelease --no-daemon
+          ./gradlew bundleRelease --no-daemon
 
       - name: Find AAB
         run: |
@@ -51,3 +51,14 @@ jobs:
         with:
           name: coin-rush-release-aab
           path: extracted/android/**/outputs/bundle/release/*.aab
+
+      - name: Build Debug APK
+        working-directory: extracted/android
+        run: |
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: coin-rush-debug-apk
+          path: extracted/android/**/outputs/apk/debug/*.apk
